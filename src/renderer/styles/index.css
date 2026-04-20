@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 自定义全局样式 */
+:root {
+  --reader-bg: #ffffff;
+  --reader-text: #1a1a1a;
+  --reader-accent: #1890ff;
+}
+
+.dark {
+  --reader-bg: #1e1e1e;
+  --reader-text: #e0e0e0;
+  --reader-accent: #40a9ff;
+}
+
+/* 阅读器背景主题 */
+.theme-light {
+  --reader-bg: #ffffff;
+  --reader-bg-alt: #f5f5f5;
+  --reader-text: #1a1a1a;
+  --reader-text-secondary: #666666;
+  --reader-border: #e8e8e8;
+}
+
+.theme-dark {
+  --reader-bg: #1e1e1e;
+  --reader-bg-alt: #2d2d2d;
+  --reader-text: #e0e0e0;
+  --reader-text-secondary: #a0a0a0;
+  --reader-border: #3a3a3a;
+}
+
+.theme-sepia {
+  --reader-bg: #f5f0e1;
+  --reader-bg-alt: #ebe5d5;
+  --reader-text: #5c5c5c;
+  --reader-text-secondary: #7a7a7a;
+  --reader-border: #d9d3c3;
+}
+
+/* 基础样式 */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Noto Sans SC', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  background-color: var(--reader-bg);
+  color: var(--reader-text);
+  overflow: hidden;
+  user-select: none;
+}
+
+/* 允许用户选中文本 */
+.reader-content {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #555;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+
+/* 窗口拖拽区域 */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* 过渡动画 */
+.fade-enter {
+  opacity: 0;
+}
+
+.fade-enter-active {
+  opacity: 1;
+  transition: opacity 200ms ease-in;
+}
+
+.fade-exit {
+  opacity: 1;
+}
+
+.fade-exit-active {
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+/* 翻页动画 */
+.page-slide-enter {
+  transform: translateX(100%);
+}
+
+.page-slide-enter-active {
+  transform: translateX(0);
+  transition: transform 300ms ease-out;
+}
+
+.page-slide-exit {
+  transform: translateX(0);
+}
+
+.page-slide-exit-active {
+  transform: translateX(-100%);
+  transition: transform 300ms ease-in;
+}
+
+/* 迷你阅读器样式 */
+.mini-reader {
+  background: var(--reader-bg);
+  color: var(--reader-text);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.mini-reader .toolbar {
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.mini-reader:hover .toolbar {
+  opacity: 1;
+}
+
+/* 加载动画 */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* 毛玻璃效果（用于迷你窗口） */
+.glass-effect {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
