@@ -25,21 +25,27 @@ function App() {
       setIsMiniMode(true);
     }
 
-    // 监听导航事件
-    window.electronAPI?.onNavigate?.((route) => {
+    // 监听导航事件（使用清理函数避免内存泄漏）
+    const cleanupNavigate = window.electronAPI?.onNavigate?.((route) => {
       if (route === '/settings') {
         setCurrentPage('settings');
       }
     });
 
     // 应用退出/关闭前保存阅读进度
-    window.addEventListener('beforeunload', () => {
-      // 同步写盘
+    const handleBeforeUnload = () => {
       const state = useBookStore.getState();
       if (state.currentBook) {
         state.flushReadPosition();
       }
-    });
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // 清理函数
+    return () => {
+      cleanupNavigate?.();
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, []);
 
   // 加载书籍后再恢复上次阅读位置

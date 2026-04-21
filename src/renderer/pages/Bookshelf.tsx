@@ -42,10 +42,13 @@ const IconList = () => (
 );
 
 const Bookshelf: React.FC<BookshelfProps> = ({ onReadBook }) => {
-  const { books, importBook, selectBook, deleteBook, isLoading } = useBookStore();
+  const { books, importBook, selectBook, deleteBookWithOption, isLoading } = useBookStore();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchText, setSearchText] = useState('');
-  const [deleteModal, setDeleteModal] = useState<{ visible: boolean; book: Book | null }>({ visible: false, book: null });
+  const [deleteModal, setDeleteModal] = useState<{ visible: boolean; book: Book | null; keepFile: boolean }>({ visible: false, book: null, keepFile: false });
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameTitle, setRenameTitle] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
 
   const filteredBooks = books.filter(book =>
     book.title.toLowerCase().includes(searchText.toLowerCase()) ||
@@ -70,14 +73,34 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onReadBook }) => {
 
   const handleDelete = async () => {
     if (deleteModal.book) {
-      await deleteBook(deleteModal.book.id);
+      const keepFile = deleteModal.keepFile;
+      await deleteBookWithOption(deleteModal.book.id, keepFile);
       const el = document.createElement('div');
-      el.textContent = '书籍已删除';
-      el.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg text-sm z-[9999]';
+      el.textContent = keepFile ? '书籍已从书架删除，原文件已保留' : '书籍已删除';
+      el.className = 'fixed top-4 right-4 ' + (keepFile ? 'bg-blue-500' : 'bg-red-500') + ' text-white px-4 py-2 rounded shadow-lg text-sm z-[9999]';
       document.body.appendChild(el);
       setTimeout(() => el.remove(), 3000);
-      setDeleteModal({ visible: false, book: null });
+      setDeleteModal({ visible: false, book: null, keepFile: false });
     }
+  };
+
+  const handleRename = async (book: Book) => {
+    const newTitle = renameTitle.trim();
+    if (newTitle && newTitle !== book.title) {
+      const updated = { ...book, title: newTitle, updatedAt: new Date() };
+      await window.electronAPI?.updateBook(updated);
+      const { books } = useBookStore.getState();
+      useBookStore.setState({ books: books.map(b => b.id === book.id ? updated : b) });
+    }
+    setRenamingId(null);
+    setIsRenaming(false);
+  };
+
+  const startRename = (e: React.MouseEvent, book: Book) => {
+    e.stopPropagation();
+    setIsRenaming(true);
+    setRenamingId(book.id);
+    setRenameTitle(book.title);
   };
 
   const formatSize = (bytes: number) => {
@@ -117,7 +140,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onReadBook }) => {
           </span>
           <input
             type="text"
-            placeholder="搜素书籍..."
+            placeholder="搜索书籍..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             className="w-48 pl-9 pr-3 py-1.5 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -176,7 +199,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onReadBook }) => {
               <div
                 key={book.id}
                 className="rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:shadow-lg hover:-translate-y-1 transition-all bg-white"
-                onClick={() => handleRead(book)}
+                onClick={() => { if (!isRenaming) handleRead(book); else setIsRenaming(false); }}
               >
                 {/* 封面区域 */}
                 <div className="h-32 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center relative">
@@ -194,7 +217,24 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onReadBook }) => {
                 </div>
                 {/* 信息区域 */}
                 <div className="p-3">
-                  <div className="text-sm font-medium truncate">{book.title}</div>
+                  <div
+                    className="text-sm font-medium truncate cursor-text"
+                    title="双击修改书名"
+                    onDoubleClick={(e) => { e.stopPropagation(); startRename(e, book); }}
+                  >
+                    {renamingId === book.id ? (
+                      <input
+                        type="text"
+                        value={renameTitle}
+                        onChange={(e) => setRenameTitle(e.target.value)}
+                        onBlur={() => handleRename(book)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleRename(book); if (e.key === 'Escape') setRenamingId(null); }}
+                        onClick={(e) => e.stopPropagation()}
+                        autoFocus
+                        className="w-full px-1 py-0 text-sm border border-blue-400 rounded outline-none"
+                      />
+                    ) : book.title || '未命名书籍'}
+                  </div>
                   <div className="text-xs text-gray-500 mt-1">
                     <div>{book.author || '未知作者'}</div>
                     <div className="flex justify-between mt-1">
@@ -219,13 +259,30 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onReadBook }) => {
               <div
                 key={book.id}
                 className="flex items-center p-4 bg-white rounded-lg border border-gray-100 hover:border-blue-200 hover:shadow cursor-pointer transition-all"
-                onClick={() => handleRead(book)}
+                onClick={() => { if (!isRenaming) handleRead(book); else setIsRenaming(false); }}
               >
                 <div className="w-12 h-16 bg-gradient-to-br from-blue-400 to-blue-600 rounded flex items-center justify-center mr-4 flex-shrink-0">
                   <div className="text-white/80"><IconBook /></div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{book.title}</div>
+                  <div
+                    className="font-medium truncate cursor-text"
+                    title="双击修改书名"
+                    onDoubleClick={(e) => { e.stopPropagation(); startRename(e, book); }}
+                  >
+                    {renamingId === book.id ? (
+                      <input
+                        type="text"
+                        value={renameTitle}
+                        onChange={(e) => setRenameTitle(e.target.value)}
+                        onBlur={() => handleRename(book)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleRename(book); if (e.key === 'Escape') setRenamingId(null); }}
+                        onClick={(e) => e.stopPropagation()}
+                        autoFocus
+                        className="w-full px-1 py-0 border border-blue-400 rounded outline-none"
+                      />
+                    ) : book.title || '未命名书籍'}
+                  </div>
                   <div className="text-sm text-gray-500">
                     {book.author || '未知作者'} · {formatWordCount(book.wordCount)} · {book.chapters?.length || 0} 章
                   </div>
@@ -244,7 +301,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onReadBook }) => {
                   )}
                   <button
                     className="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                    onClick={(e) => { e.stopPropagation(); setDeleteModal({ visible: true, book }); }}
+                    onClick={(e) => { e.stopPropagation(); setDeleteModal({ visible: true, book, keepFile: false }); }}
                   >
                     <IconDelete />
                   </button>
@@ -262,11 +319,22 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onReadBook }) => {
             <h3 className="font-bold text-lg mb-2">删除书籍</h3>
             <p className="text-gray-600 text-sm mb-4">
               确定要删除《{deleteModal.book?.title}》吗？
-              <br /><span className="text-gray-400">此操作将删除本地文件，不可恢复</span>
             </p>
+            <label className="flex items-center gap-2 mb-4 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={deleteModal.keepFile}
+                onChange={(e) => setDeleteModal({ ...deleteModal, keepFile: e.target.checked })}
+                className="w-4 h-4 rounded"
+              />
+              <span>仅删除书架记录，保留本地文件</span>
+            </label>
+            {!deleteModal.keepFile && (
+              <p className="text-xs text-red-400 mb-4">此操作将删除本地文件，不可恢复</p>
+            )}
             <div className="flex justify-end gap-2">
               <button className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded"
-                onClick={() => setDeleteModal({ visible: false, book: null })}>取消</button>
+                onClick={() => setDeleteModal({ visible: false, book: null, keepFile: false })}>取消</button>
               <button className="px-4 py-2 text-sm bg-red-500 text-white rounded hover:bg-red-600"
                 onClick={handleDelete}>删除</button>
             </div>

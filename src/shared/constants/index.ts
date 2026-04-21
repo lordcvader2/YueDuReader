@@ -13,7 +13,7 @@ export const MINI_MODE_THRESHOLD = {
 };
 
 // QCLAW 默认端点
-export const DEFAULT_QCLAW_ENDPOINT = 'http://localhost:8080';
+export const DEFAULT_QCLAW_ENDPOINT = '';
 
 // 阅读器默认设置
 export const DEFAULT_READER_SETTINGS = {
@@ -81,4 +81,8 @@ export const IPC_CHANNELS = {
   WINDOW_CLOSE: 'window:close',
   WINDOW_SET_ALWAYS_ON_TOP: 'window:setAlwaysOnTop',
   WINDOW_SET_OPACITY: 'window:setOpacity',
+
+  // 书籍操作
+  BOOK_RESTORE: 'book:restore',
+  BOOK_DELETE_WITH_OPTION: 'book:deleteWithOption',
 } as const;

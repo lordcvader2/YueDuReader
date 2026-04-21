@@ -15,6 +15,7 @@ const Reader: React.FC = () => {
     saveReadPosition,
     purifyBook,
     purifyProgress,
+    restoreOriginal,
   } = useBookStore();
   const { settings, updateReaderTheme, updateReaderFont, updateSettings } = useSettingsStore();
 
@@ -30,6 +31,8 @@ const Reader: React.FC = () => {
   const [isPurifying, setIsPurifying] = useState(false);
   const [pageKey, setPageKey] = useState(0);
   const [animating, setAnimating] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'warning' } | null>(null);
+  const [showPurified, setShowPurified] = useState(false);
 
   const theme = settings?.reader?.theme || 'light';
   const chapters = currentBook?.chapters || [];
@@ -77,6 +80,41 @@ const Reader: React.FC = () => {
     }
   };
 
+  // When book opens, auto-purify first chapter and show toast
+  useEffect(() => {
+    if (currentBook && !currentBook.purified) {
+      (async () => {
+        try {
+          const chapter = currentBook.chapters[0];
+          if (chapter) {
+            const result = await window.electronAPI?.purifyChapter(chapter.content) as { corrections?: unknown[]; removedAds?: unknown[]; removedGarbage?: unknown[] } | null;
+            if (result) {
+              const total = (result.corrections?.length || 0) + (result.removedAds?.length || 0) + (result.removedGarbage?.length || 0);
+              if (total > 0) {
+                setToast({
+                  message: `\u672c\u5730\u51c0\u5316\u5b8c\u6210\uff1a\u4fee\u6b63 ${result.corrections?.length || 0} \u5904\uff0c\u79fb\u9664\u5e7f\u544a ${result.removedAds?.length || 0} \u5904\uff0c\u6e05\u7406\u4e71\u7801 ${result.removedGarbage?.length || 0} \u5904`,
+                  type: 'success',
+                });
+              } else {
+                setToast({ message: '\u672c\u5730\u51c0\u5316\u68c0\u67e5\u5b8c\u6210\uff0c\u672c\u7ae0\u5185\u5bb9\u5f88\u5e72\u51c0 \u2728', type: 'info' });
+              }
+            }
+          }
+        } catch {
+          // silently skip
+        }
+      })();
+    } else if (currentBook) {
+      // Show a simple welcome toast
+      const chapCount = currentBook.chapters?.length || 0;
+      const wordStr = currentBook.wordCount > 10000
+        ? (currentBook.wordCount / 10000).toFixed(1) + ' \u4e07\u5b57'
+        : currentBook.wordCount + ' \u5b57';
+      setToast({ message: `\u300a${currentBook.title}\u300b ${chapCount} \u7ae0 / ${wordStr}`, type: 'info' });
+    }
+  }, [currentBook?.id]);
+
+  // Scroll to last position when chapter changes
   useEffect(() => {
     scrollToLastPosition();
     setPageKey(k => k + 1);
@@ -99,6 +137,18 @@ const Reader: React.FC = () => {
     setIsPurifying(true);
     await purifyBook(currentBook.id);
     setIsPurifying(false);
+  };
+
+  const handleRestore = async () => {
+    if (!currentBook) return;
+    const result = await restoreOriginal(currentBook.id);
+    if (result.success) {
+      setToast({ message: '\u5df2\u6062\u590d\u539f\u6587', type: 'success' });
+      // 刷新当前书籍
+      await useBookStore.getState().loadBooks();
+    } else {
+      setToast({ message: result.message || '\u6062\u590d\u5931\u8d25', type: 'warning' });
+    }
   };
 
   const themeConfig: Record<string, { bg: string; bgAlt: string; text: string; textSec: string; border: string }> = {
@@ -127,18 +177,35 @@ const Reader: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col relative" style={{ backgroundColor: tc.bg, color: tc.text }}>
+      {/* Toast notification */}
+      {toast && (
+        <div
+          onClick={() => setToast(null)}
+          className="absolute top-3 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-lg shadow-lg text-sm cursor-pointer transition-all hover:shadow-xl max-w-md text-center"
+          style={{
+            backgroundColor: toast.type === 'success' ? '#f0fdf4' : toast.type === 'warning' ? '#fffbeb' : '#eff6ff',
+            color: toast.type === 'success' ? '#166534' : toast.type === 'warning' ? '#92400e' : '#1e40af',
+            border: `1px solid ${toast.type === 'success' ? '#bbf7d0' : toast.type === 'warning' ? '#fde68a' : '#bfdbfe'}`,
+          }}
+        >
+          {toast.message}
+          <span className="ml-2 opacity-50 text-xs">点击关闭</span>
+        </div>
+      )}
+
       {/* 底部滑动进度条 */}
       <div className="absolute inset-0 z-0 pointer-events-none select-none flex items-end" style={{ paddingBottom: 6 }}>
         <div className="h-0.5 rounded-full transition-all duration-300"
           style={{ width: `${overallProgress}%`, backgroundColor: ac }} />
       </div>
 
-      {/* 顶部工具栏 */}
+      {/* 顶部工具栏 - 鼠标移入显示，移出隐藏 */}
       <div
         className="absolute top-0 left-0 right-0 z-20 px-4 py-3 flex items-center justify-between"
         style={{
           background: `linear-gradient(to bottom, ${tc.bg}ee, ${tc.bg}00)`,
           opacity: showControls ? 1 : 0,
+          pointerEvents: showControls ? 'auto' : 'none', // 隐藏时禁用点击，避免误触
           transition: 'opacity 300ms',
         }}
       >
@@ -164,12 +231,20 @@ const Reader: React.FC = () => {
             </svg>
           </button>
           <button onClick={handlePurify} disabled={isPurifying}
-            className="p-1.5 rounded hover:bg-black/10 transition-colors disabled:opacity-40" title="AI 净化">
+            className="p-1.5 rounded hover:bg-black/10 transition-colors disabled:opacity-40" title="净化">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
               style={isPurifying ? { animation: 'spin 1s linear infinite' } : {}}>
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
             </svg>
           </button>
+          {currentBook?.purified && (
+            <button onClick={handleRestore}
+              className="p-1.5 rounded hover:bg-black/10 transition-colors" title="恢复原文">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.12"/>
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
@@ -219,12 +294,13 @@ const Reader: React.FC = () => {
           )}
         </div>
 
-        {/* 底部进度条 */}
+        {/* 底部进度条 - 鼠标移入显示，移出隐藏 */}
         <div
           className="absolute bottom-0 left-0 right-0 px-4 py-3 flex items-center gap-3"
           style={{
             background: `linear-gradient(to top, ${tc.bg}ee, ${tc.bg}00)`,
             opacity: showControls ? 1 : 0,
+            pointerEvents: showControls ? 'auto' : 'none', // 隐藏时禁用点击
             transition: 'opacity 300ms',
           }}
         >
@@ -362,7 +438,7 @@ const Reader: React.FC = () => {
                 <div className="flex justify-between mt-1">
                   <span className="text-xs" style={{ color: tc.textSec }}>紧凑</span>
                   <span className="text-xs" style={{ color: tc.textSec }}>适中</span>
-                  <span className="text-xs" style={{ color: tc.textSec }}>余场</span>
+                  <span className="text-xs" style={{ color: tc.textSec }}>宽松</span>
                 </div>
               </div>
 

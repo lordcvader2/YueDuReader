@@ -7,13 +7,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 书籍管理
   importBook: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.BOOK_IMPORT, filePath),
   getBooks: () => ipcRenderer.invoke(IPC_CHANNELS.BOOK_LIST),
-  getBook: (bookId: string, loadContent?: boolean) => ipcRenderer.invoke('book:get', bookId, loadContent),
+  getBook: (bookId: string, loadContent?: boolean, chapterIndex?: number) =>
+    ipcRenderer.invoke('book:get', bookId, loadContent, chapterIndex),
+  getChapter: (bookId: string, chapterIndex: number) =>
+    ipcRenderer.invoke('book:getChapter', bookId, chapterIndex),
   deleteBook: (bookId: string) => ipcRenderer.invoke(IPC_CHANNELS.BOOK_DELETE, bookId),
-  updateBook: (book: any) => ipcRenderer.invoke(IPC_CHANNELS.BOOK_UPDATE, book),
+  updateBook: (book: unknown) => ipcRenderer.invoke(IPC_CHANNELS.BOOK_UPDATE, book),
+  deleteBookWithOption: (bookId: string, keepFile: boolean) =>
+    ipcRenderer.invoke(IPC_CHANNELS.BOOK_DELETE_WITH_OPTION, bookId, keepFile),
 
   // 设置
   getSettings: () => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET),
-  setSettings: (settings: any) => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SET, settings),
+  setSettings: (settings: unknown) => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SET, settings),
 
   // 老板键
   registerBossKey: (key: string) => ipcRenderer.invoke(IPC_CHANNELS.BOSS_KEY_REGISTER, key),
@@ -32,35 +37,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setAlwaysOnTop: (flag: boolean) => ipcRenderer.invoke(IPC_CHANNELS.WINDOW_SET_ALWAYS_ON_TOP, flag),
   setOpacity: (opacity: number) => ipcRenderer.invoke(IPC_CHANNELS.WINDOW_SET_OPACITY, opacity),
 
-  // 事件监听
+  // 恢复原文
+  restoreOriginal: (bookId: string) => ipcRenderer.invoke(IPC_CHANNELS.BOOK_RESTORE, bookId),
+
+  // 事件监听（返回清理函数，避免内存泄漏）
   onWindowResize: (callback: (size: { width: number; height: number }) => void) => {
-    ipcRenderer.on('window:resize', (_, size) => callback(size));
+    const handler = (_: unknown, size: { width: number; height: number }) => callback(size);
+    ipcRenderer.on('window:resize', handler);
+    // 返回清理函数
+    return () => ipcRenderer.removeListener('window:resize', handler);
   },
   onNavigate: (callback: (route: string) => void) => {
-    ipcRenderer.on('navigate:settings', () => callback('/settings'));
+    const handler = () => callback('/settings');
+    ipcRenderer.on('navigate:settings', handler);
+    // 返回清理函数
+    return () => ipcRenderer.removeListener('navigate:settings', handler);
   },
 });
-
-// TypeScript 类型定义
-export interface ElectronAPI {
-  importBook: (filePath: string) => Promise<any>;
-  getBooks: () => Promise<any[]>;
-  getBook: (bookId: string, loadContent?: boolean) => Promise<any>;
-  deleteBook: (bookId: string) => Promise<void>;
-  updateBook: (book: any) => Promise<void>;
-  getSettings: () => Promise<any>;
-  setSettings: (settings: any) => Promise<void>;
-  registerBossKey: (key: string) => Promise<void>;
-  toggleBossKey: () => Promise<void>;
-  purifyChapter: (text: string) => Promise<any>;
-  purifyBook: (bookId: string) => Promise<any>;
-  openFileDialog: () => Promise<string | null>;
-  minimizeWindow: () => Promise<void>;
-  closeWindow: () => Promise<void>;
-  setAlwaysOnTop: (flag: boolean) => Promise<void>;
-  setOpacity: (opacity: number) => Promise<void>;
-  onWindowResize: (callback: (size: { width: number; height: number }) => void) => void;
-  onNavigate: (callback: (route: string) => void) => void;
-}
-
-// 注意：electronAPI 类型在 vite-env.d.ts 中定义

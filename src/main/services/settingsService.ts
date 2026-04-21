@@ -26,7 +26,7 @@ export class SettingsService {
       removeAds: true,
       removeGarbage: true,
       keepBackup: true,
-      qclawEndpoint: DEFAULT_QCLAW_ENDPOINT,
+      qclawEndpoint: '',
     },
     reader: {
       ...DEFAULT_READER_SETTINGS,
@@ -47,10 +47,16 @@ export class SettingsService {
 
   getSettings(): AppSettings {
     const settings = this.store.store as unknown as AppSettings;
-    return {
+    const merged = {
       ...this.defaultSettings,
       ...settings,
     };
+    // Migration: clear old default endpoint to use local mode
+    if (merged.purification.qclawEndpoint === 'http://localhost:8080') {
+      merged.purification.qclawEndpoint = '';
+      this.store.set('purification.qclawEndpoint', '');
+    }
+    return merged;
   }
 
   setSettings(settings: Partial<AppSettings>): void {

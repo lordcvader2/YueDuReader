@@ -67,12 +67,17 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   }, [settings]);
 
   const checkService = async () => {
+    const endpoint = local?.purification?.qclawEndpoint?.trim();
+    if (!endpoint) {
+      setServiceStatus({ available: true, message: '本地净化模式（离线可用）' });
+      return;
+    }
     setServiceStatus({ available: false, message: '检测中...' });
     try {
-      const r = await fetch(`${local?.purification?.qclawEndpoint || 'http://localhost:8080'}/health`, { signal: AbortSignal.timeout(3000) });
-      setServiceStatus({ available: r.ok, message: r.ok ? 'QCLAW 服务在线' : `服务响应: ${r.status}` });
+      const r = await fetch(`${endpoint}/health`, { signal: AbortSignal.timeout(3000) });
+      setServiceStatus({ available: r.ok, message: r.ok ? 'QCLAW 远程服务可用' : `服务响应: ${r.status}` });
     } catch {
-      setServiceStatus({ available: false, message: '无法连接到 QCLAW 服务' });
+      setServiceStatus({ available: false, message: '远程服务不可用，将使用本地净化规则' });
     }
   };
 
@@ -89,7 +94,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     setLocal({
       bossKey: { enabled: true, key: 'Alt+Q', mode: 'minimize', playSound: false },
       miniMode: { autoSwitch: true, thresholdWidth: 400, thresholdHeight: 300, alwaysOnTop: true, opacity: 100 },
-      purification: { autoPurify: false, fixTypos: true, removeAds: true, removeGarbage: true, keepBackup: true, qclawEndpoint: 'http://localhost:8080' },
+      purification: { autoPurify: false, fixTypos: true, removeAds: true, removeGarbage: true, keepBackup: true, qclawEndpoint: '' },
       reader: { fontSize: 18, lineHeight: 1.8, fontFamily: 'Noto Serif SC, SimSun, serif', theme: 'light', pageAnimation: 'fade' },
       general: { language: 'zh-CN', startupMinimized: false, closeToTray: true },
     });
@@ -137,7 +142,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
 
         {/* 老板键 */}
         <SectionCard icon={<IconKey />} title="老板键设置">
-          <Field label="启用老板键" hint="让用合快捷键即刻隐藏应用">
+          <Field label="启用老板键" hint="使用快捷键即刻隐藏应用">
             <Toggle checked={local.bossKey.enabled} onChange={(v) => upd('bossKey.enabled', v)} />
           </Field>
           <Field label="快捷键">
@@ -208,7 +213,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
               </Field>
             ))}
           </div>
-          <Field label="QCLAW API 地址" hint="配置 AI 净化服务地址">
+          <Field label="留空则使用本地净化规则" hint="配置 AI 净化服务地址">
             <input type="text" value={local.purification.qclawEndpoint}
               onChange={(e) => upd('purification.qclawEndpoint', e.target.value)}
               className="w-48 px-3 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -226,7 +231,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
             )}
           </div>
           <div className="bg-yellow-50 rounded p-3 text-xs text-yellow-700">
-            如果 QCLAW 服务不可用，将使用本地规则进行基础净化（移除乱码、常见广告模式）
+            默认使用本地净化规则，可移除乱码、广告、修正错别字。如需 AI 智能净化，配置 QCLAW 地址即可。
           </div>
         </SectionCard>
 

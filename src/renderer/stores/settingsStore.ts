@@ -20,7 +20,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   loadSettings: async () => {
     set({ isLoading: true });
     try {
-      const settings = await window.electronAPI?.getSettings();
+      const settings = await window.electronAPI?.getSettings() as AppSettings;
       set({ settings, isLoading: false });
       
       // 应用主题
@@ -91,7 +91,7 @@ function getDefaultSettings(): AppSettings {
   return {
     bossKey: { enabled: true, key: 'Alt+Q', mode: 'minimize', playSound: false },
     miniMode: { autoSwitch: true, thresholdWidth: 400, thresholdHeight: 300, alwaysOnTop: true, opacity: 100 },
-    purification: { autoPurify: false, fixTypos: true, removeAds: true, removeGarbage: true, keepBackup: true, qclawEndpoint: 'http://localhost:8080' },
+    purification: { autoPurify: false, fixTypos: true, removeAds: true, removeGarbage: true, keepBackup: true, qclawEndpoint: '' },
     reader: { fontSize: 18, lineHeight: 1.8, fontFamily: 'Noto Serif SC, SimSun, serif', theme: 'light', pageAnimation: 'fade' },
     general: { language: 'zh-CN', startupMinimized: false, closeToTray: true },
   };

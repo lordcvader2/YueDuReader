@@ -13,18 +13,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // 全局异常捕获 - 记录所有未处理错误到日志文件
 process.on('uncaughtException', (error) => {
   console.error('[MAIN] Uncaught Exception:', error.message, error.stack);
-  const fs = require('fs');
   const logPath = path.join(app.getPath('userData'), 'crash.log');
   const log = `[${new Date().toISOString()}] Uncaught Exception: ${error.message}\n${error.stack}\n\n`;
-  try { fs.appendFileSync(logPath, log); } catch {}
+  try { require('fs').appendFileSync(logPath, log); } catch {}
 });
 
 process.on('unhandledRejection', (reason) => {
   console.error('[MAIN] Unhandled Rejection:', reason);
-  const fs = require('fs');
   const logPath = path.join(app.getPath('userData'), 'crash.log');
   const log = `[${new Date().toISOString()}] Unhandled Rejection: ${reason}\n\n`;
-  try { fs.appendFileSync(logPath, log); } catch {}
+  try { require('fs').appendFileSync(logPath, log); } catch {}
 });
 
 let mainWindow: BrowserWindow | null = null;
@@ -52,6 +50,7 @@ function createMainWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true, // 启用沙箱模式增强安全性
       preload: path.join(__dirname, 'preload.js'),
     },
     frame: false, // 无边框窗口，支持自定义标题栏
@@ -62,8 +61,6 @@ function createMainWindow() {
   // 加载应用
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
-    // DevTools can be opened manually with F12
-    // mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../../dist/renderer/index.html'));
   }
@@ -141,6 +138,7 @@ function createMiniWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       preload: path.join(__dirname, 'preload.js'),
     },
     frame: false,
@@ -163,10 +161,13 @@ function createMiniWindow() {
   });
 }
 
-// 注册 IPC 处理器
+// 注册 IPC 处理器（带参数校验）
 function registerIpcHandlers() {
   // 书籍管理
   ipcMain.handle(IPC_CHANNELS.BOOK_IMPORT, async (_, filePath: string) => {
+    if (!filePath || typeof filePath !== 'string') {
+      throw new Error('无效的文件路径参数');
+    }
     return bookService.importBook(filePath);
   });
 
@@ -175,16 +176,47 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle(IPC_CHANNELS.BOOK_DELETE, async (_, bookId: string) => {
+    if (!bookId || typeof bookId !== 'string') {
+      throw new Error('无效的书籍 ID');
+    }
     return bookService.deleteBook(bookId);
   });
 
+  ipcMain.handle(IPC_CHANNELS.BOOK_DELETE_WITH_OPTION, async (_, bookId: string, keepFile: boolean) => {
+    if (!bookId || typeof bookId !== 'string') {
+      throw new Error('无效的书籍 ID');
+    }
+    return bookService.deleteBook(bookId, Boolean(keepFile));
+  });
+
+  ipcMain.handle(IPC_CHANNELS.BOOK_RESTORE, async (_, bookId: string) => {
+    if (!bookId || typeof bookId !== 'string') {
+      throw new Error('无效的书籍 ID');
+    }
+    return bookService.restoreOriginal(bookId);
+  });
+
   ipcMain.handle(IPC_CHANNELS.BOOK_UPDATE, async (_, book: any) => {
+    if (!book || !book.id) {
+      throw new Error('无效的书籍数据');
+    }
     return bookService.updateBook(book);
   });
 
   // 获取书籍（含章节内容，按需从文件读取）
-  ipcMain.handle('book:get', async (_, bookId: string, loadContent: boolean) => {
-    return bookService.getBook(bookId, loadContent);
+  ipcMain.handle('book:get', async (_, bookId: string, loadContent: boolean, chapterIndex?: number) => {
+    if (!bookId || typeof bookId !== 'string') {
+      throw new Error('无效的书籍 ID');
+    }
+    return bookService.getBook(bookId, Boolean(loadContent), chapterIndex);
+  });
+
+  // 获取单章内容（轻量级）
+  ipcMain.handle('book:getChapter', async (_, bookId: string, chapterIndex: number) => {
+    if (!bookId || typeof bookId !== 'string' || typeof chapterIndex !== 'number') {
+      throw new Error('无效的参数');
+    }
+    return bookService.getChapterContent(bookId, chapterIndex);
   });
 
   // 设置
@@ -193,6 +225,9 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle(IPC_CHANNELS.SETTINGS_SET, async (_, settings: any) => {
+    if (!settings || typeof settings !== 'object') {
+      throw new Error('无效的设置数据');
+    }
     settingsService.setSettings(settings);
     // 更新老板键
     if (settings.bossKey) {
@@ -212,10 +247,16 @@ function registerIpcHandlers() {
 
   // 净化
   ipcMain.handle(IPC_CHANNELS.PURIFY_CHAPTER, async (_, text: string) => {
+    if (typeof text !== 'string') {
+      throw new Error('无效的文本参数');
+    }
     return purifyService.purifyChapter(text);
   });
 
   ipcMain.handle(IPC_CHANNELS.PURIFY_BOOK, async (_, bookId: string) => {
+    if (!bookId || typeof bookId !== 'string') {
+      throw new Error('无效的书籍 ID');
+    }
     return purifyService.purifyBook(bookId);
   });
 
@@ -242,11 +283,12 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle(IPC_CHANNELS.WINDOW_SET_ALWAYS_ON_TOP, async (_, flag: boolean) => {
-    miniWindow?.setAlwaysOnTop(flag);
+    miniWindow?.setAlwaysOnTop(Boolean(flag));
   });
 
   ipcMain.handle(IPC_CHANNELS.WINDOW_SET_OPACITY, async (_, opacity: number) => {
-    miniWindow?.setOpacity(opacity);
+    const validOpacity = Math.max(0.1, Math.min(1, Number(opacity) || 1));
+    miniWindow?.setOpacity(validOpacity);
   });
 }
 
@@ -261,7 +303,6 @@ async function initialize() {
   // 注册 IPC 处理器
   registerIpcHandlers();
 
-  // 注意：老板键注册在 createMainWindow 之后进行，确保 app 已完全 ready
   console.log('初始化完成，等待窗口创建后注册老板键');
 }
 
@@ -288,9 +329,11 @@ app.on('window-all-closed', () => {
   }
 });
 
-// 应用退出前清理
+// 应用退出前清理：flush 索引 + 注销快捷键
 app.on('before-quit', () => {
   isQuitting = true;
+  // 确保书籍索引保存
+  bookService?.flushIndex();
   // 只有在 app ready 后才能操作 globalShortcut
   if (app.isReady()) {
     globalShortcut.unregisterAll();
